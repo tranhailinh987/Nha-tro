@@ -1424,13 +1424,30 @@ export default function App() {
     alert(`Thành công! Đã ấn định tài khoản "${targetUser.fullName}" thành ${roleName} theo thẩm quyền của ${currentUser.fullName} (${currentUser.roleId === 1 ? 'Admin Cấp 1' : 'Quản lý Cấp 2'})!`);
   };
 
-  // 14. Kiểm tra kết nối SQL Server
+  // 14. Đăng nhập & Kết nối SQL Server (Tự động cập nhật toàn bộ CSDL và khử trùng lặp)
   const handleTestSqlConnection = async (config: any) => {
     try {
+      const payload = {
+        users: allUsers,
+        nodes: nodes,
+        objectTypes: objectTypes,
+        contracts: contracts,
+        roommates: roommates,
+        invoices: invoices,
+        issues: issues,
+        reviews: reviews,
+        posts: posts,
+        reservations: reservations
+      };
+
       const res = await fetch('/api/sql/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
+        body: JSON.stringify({
+          ...config,
+          autoSync: true,
+          payload
+        })
       });
       const data = await res.json();
       if (data.connected) {
@@ -1467,6 +1484,22 @@ export default function App() {
           setContracts(data.data.contracts);
           localStorage.setItem('rental_contracts', JSON.stringify(data.data.contracts));
         }
+        if (data.data.roommates && data.data.roommates.length > 0) {
+          setRoommates(data.data.roommates);
+          localStorage.setItem('rental_roommates', JSON.stringify(data.data.roommates));
+        }
+        if (data.data.invoices && data.data.invoices.length > 0) {
+          setInvoices(data.data.invoices);
+          localStorage.setItem('rental_invoices_v3', JSON.stringify(data.data.invoices));
+        }
+        if (data.data.issues && data.data.issues.length > 0) {
+          setIssues(data.data.issues);
+          localStorage.setItem('rental_issues', JSON.stringify(data.data.issues));
+        }
+        if (data.data.reservations && data.data.reservations.length > 0) {
+          setReservations(data.data.reservations);
+          localStorage.setItem('rental_reservations', JSON.stringify(data.data.reservations));
+        }
       }
       return data;
     } catch (err: any) {
@@ -1474,7 +1507,7 @@ export default function App() {
     }
   };
 
-  // 14.2 Đẩy toàn bộ dữ liệu Web hiện tại lên SQL Server (Push Data)
+  // 14.2 Đẩy toàn bộ dữ liệu Web hiện tại lên SQL Server (Push Data với Khử Trùng Lặp)
   const handlePushDataToSql = async () => {
     try {
       const res = await fetch('/api/sql/push-all-data', {
@@ -1482,7 +1515,15 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           users: allUsers,
-          nodes: nodes
+          nodes: nodes,
+          objectTypes: objectTypes,
+          contracts: contracts,
+          roommates: roommates,
+          invoices: invoices,
+          issues: issues,
+          reviews: reviews,
+          posts: posts,
+          reservations: reservations
         })
       });
       return await res.json();
@@ -1491,7 +1532,17 @@ export default function App() {
     }
   };
 
-  // 14.3 Khởi tạo schema & seed data trực tiếp lên SQL Server
+  // 14.3 Khử trùng lặp trên CSDL SQL Server
+  const handleDeduplicateSql = async () => {
+    try {
+      const res = await fetch('/api/sql/deduplicate', { method: 'POST' });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, message: 'Lỗi khi khử trùng lặp CSDL: ' + err.message };
+    }
+  };
+
+  // 14.4 Khởi tạo schema & seed data trực tiếp lên SQL Server
   const handleInitSqlSchema = async () => {
     try {
       const res = await fetch('/api/sql/init-schema', { method: 'POST' });
@@ -1997,6 +2048,7 @@ export default function App() {
         onPullData={handlePullDataFromSql}
         onPushData={handlePushDataToSql}
         onInitSchema={handleInitSqlSchema}
+        onDeduplicate={handleDeduplicateSql}
       />
     </div>
   );

@@ -290,107 +290,178 @@ CREATE TABLE dbo.BuildingArticles (
 GO
 
 -- =====================================================================================
--- PHẦN 6: CHÈN DỮ LIỆU MẪU ĐẦY ĐỦ (SEED DATA)
+-- PHẦN 6: CHÈN DỮ LIỆU MẪU AN TOÀN (KHÔNG TRÙNG LẶP DỮ LIỆU - IDEMPOTENT SEED DATA)
 -- =====================================================================================
 
 -- 6.1 Chèn 3 Vai trò chuẩn
-INSERT INTO dbo.Roles (RoleId, RoleCode, RoleName, Description) VALUES
-(1, 'ADMIN', N'Quản trị viên cấp cao', N'3 người điều khiển toàn bộ hệ thống 100 nhà'),
-(2, 'BUILDING_MANAGER', N'Quản lý tòa nhà', N'Quản lý 1 hoặc nhiều tòa nhà trọ'),
-(3, 'TENANT', N'Người dùng / Khách thuê', N'Khách thuê phòng và người ở cùng');
+IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE RoleId = 1)
+    INSERT INTO dbo.Roles (RoleId, RoleCode, RoleName, Description) VALUES (1, 'ADMIN', N'Quản trị viên cấp cao', N'3 người điều khiển toàn bộ hệ thống 100 nhà');
+IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE RoleId = 2)
+    INSERT INTO dbo.Roles (RoleId, RoleCode, RoleName, Description) VALUES (2, 'BUILDING_MANAGER', N'Quản lý tòa nhà', N'Quản lý 1 hoặc nhiều tòa nhà trọ');
+IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE RoleId = 3)
+    INSERT INTO dbo.Roles (RoleId, RoleCode, RoleName, Description) VALUES (3, 'TENANT', N'Người dùng / Khách thuê', N'Khách thuê phòng và người ở cùng');
 GO
 
--- 6.2 Chèn Tài khoản: 3 Admins, Quản lý, và Khách thuê (CCCD duy nhất)
-INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) VALUES
--- 3 Admins cao nhất
-(1, N'Trần Hải Linh (Admin 1)', '001085001111', '0901111111', N'Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội', '$2a$12$e8Yd8w...', 1),
-(1, N'Lê Minh Tuấn (Admin 2)', '001085002222', '0902222222', N'Tòa Landmark 81, Bình Thạnh, TP.HCM', '$2a$12$e8Yd8w...', 1),
-(1, N'Phạm Quang Huy (Admin 3)', '001085003333', '0903333333', N'Khu Đô thị Ecopark, Hưng Yên', '$2a$12$e8Yd8w...', 1),
--- Quản lý tòa nhà
-(2, N'Lê Văn Hoàng (Quản lý Cầu Giấy)', '001090004444', '0914444444', N'Tổ 8, Phường Mai Dịch, Cầu Giấy, Hà Nội', '$2a$12$e8Yd8w...', 1),
-(2, N'Vũ Thị Bích (Quản lý Đống Đa)', '001090005555', '0915555555', N'Ngõ 119 Chùa Bộc, Đống Đa, Hà Nội', '$2a$12$e8Yd8w...', 1),
--- Người dùng (Khách thuê)
-(3, N'Nguyễn Văn An', '034098006666', '0986666666', N'Thôn 3, Xã Đông Hưng, Thái Bình', '$2a$12$e8Yd8w...', 1),
-(3, N'Trần Thị Mai', '034098007777', '0987777777', N'Khu 2, Phường Bãi Cháy, Hạ Long, Quảng Ninh', '$2a$12$e8Yd8w...', 1),
-(3, N'Hoàng Quốc Bảo (Ở cùng An)', '034098008888', '0988888888', N'Xã Tân Yên, Tuyên Quang', '$2a$12$e8Yd8w...', 1);
+-- 6.2 Chèn Tài khoản: 3 Admins, Quản lý, và Khách thuê (Tránh trùng CCCD & Số điện thoại)
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '001085001111')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (1, N'Trần Hải Linh (Admin Cấp Cao)', '001085001111', '0901111111', N'Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '001085002222')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (1, N'Nguyễn Minh Quân (Admin Cấp Cao)', '001085002222', '0902222222', N'Tòa Landmark 81, Bình Thạnh, TP.HCM', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '001085003333')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (1, N'Đặng Thái Sơn (Admin Cấp Cao)', '001085003333', '0903333333', N'Khu Đô thị Ecopark, Hưng Yên', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '001090004444')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (2, N'Lê Văn Hoàng (Quản Lý Tòa Nhà)', '001090004444', '0914444444', N'Tổ 8, Phường Mai Dịch, Cầu Giấy, Hà Nội', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '001092005555')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (2, N'Vũ Thị Mai (Quản Lý Tòa Nhà)', '001092005555', '0915555555', N'Số 25 Phố Huế, Hoàn Kiếm, Hà Nội', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '034098006666')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (3, N'Nguyễn Văn An (Khách Thuê)', '034098006666', '0986666666', N'Thôn 3, Xã Đông Hưng, Thái Bình', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '036099007777')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (3, N'Trần Thu Trang', '036099007777', '0987777777', N'Khu 2, Phường Bãi Cháy, Hạ Long, Quảng Ninh', 'plain_or_hash_123', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = '034098008888')
+    INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive) 
+    VALUES (3, N'Hoàng Quốc Bảo (Ở cùng An)', '034098008888', '0988888888', N'Xã Tân Yên, Tuyên Quang', 'plain_or_hash_123', 1);
 GO
 
 -- 6.3 Chèn Danh mục Loại Đối Tượng mở rộng (ObjectTypes)
-INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES
-('BUILDING', N'Tòa nhà trọ', 'PROPERTY', NULL, 1),
-('FLOOR', N'Tầng lầu', 'PROPERTY', NULL, 1),
-('ROOM', N'Phòng trọ', 'ROOM', N'Tháng', 1),
-('FACILITY_GROUP', N'Khu tiện ích dùng chung', 'PROPERTY', NULL, 1),
-('ELEC_METER', N'Công tơ điện phòng', 'DEVICE', 'kWh', 0),
-('WATER_METER', N'Đồng hồ nước phòng', 'DEVICE', N'Khối', 0),
-('AIR_COND', N'Điều hòa máy lạnh', 'DEVICE', NULL, 0),
-('FRIDGE', N'Tủ lạnh', 'DEVICE', NULL, 0),
-('WATER_HEATER', N'Bình nóng lạnh', 'DEVICE', NULL, 0),
-('GATE_LOCK', N'Cổng an ninh thẻ từ / vân tay', 'DEVICE', NULL, 0),
-('WASHING_MACHINE', N'Máy giặt dùng chung', 'PUBLIC_SERVICE', N'Lần', 0),
-('EV_CHARGER', N'Trạm sạc xe điện', 'PUBLIC_SERVICE', 'kWh', 0),
-('PUBLIC_PHONE', N'Điện thoại công cộng nội bộ', 'PUBLIC_SERVICE', N'Phút', 0),
-('PUBLIC_WIFI', N'Internet / WiFi công cộng', 'PUBLIC_SERVICE', N'Gói', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'BUILDING')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('BUILDING', N'Tòa Nhà Trọ', 'PROPERTY', NULL, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'FLOOR')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('FLOOR', N'Tầng Nhà', 'PROPERTY', NULL, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'ROOM')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('ROOM', N'Phòng Cho Thuê', 'ROOM', N'Tháng', 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'FACILITY_GROUP')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('FACILITY_GROUP', N'Khu Tiện Ích Dùng Chung', 'PROPERTY', NULL, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'WASHING_MACHINE')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('WASHING_MACHINE', N'Máy Giặt Chung', 'DEVICE', N'Lần', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'EV_CHARGER')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('EV_CHARGER', N'Trạm Sạc Xe Điện', 'DEVICE', 'kWh', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'PUBLIC_PHONE')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('PUBLIC_PHONE', N'Điện Thoại Sảnh', 'PUBLIC_SERVICE', N'Phút', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'SECURITY_GATE')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('SECURITY_GATE', N'Cổng Cửa An Ninh Vân Tay/Thẻ', 'DEVICE', NULL, 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'POWER_METER')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('POWER_METER', N'Công Tơ Điện Thông Minh', 'DEVICE', 'kWh', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'WATER_METER')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('WATER_METER', N'Đồng Hồ Đo Nước Lạnh', 'DEVICE', N'Khối', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'AIR_COND')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('AIR_COND', N'Điều Hòa Không Khí Inverter', 'DEVICE', N'Tháng', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'FRIDGE')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('FRIDGE', N'Tủ Lạnh Mini / Phòng', 'DEVICE', N'Tháng', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'WATER_HEATER')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('WATER_HEATER', N'Bình Nước Nóng Ariston', 'DEVICE', N'Tháng', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ObjectTypes WHERE TypeCode = 'WIFI_ROUTER')
+    INSERT INTO dbo.ObjectTypes (TypeCode, TypeName, CategoryGroup, MetricUnit, HasSubItems) VALUES ('WIFI_ROUTER', N'Cục Phát WiFi Riêng (Phòng)', 'DEVICE', N'Tháng', 0);
 GO
 
--- 6.4 Chèn Cây Đối Tượng Mẫu (ManagementNodes)
+-- 6.4 Chèn Cây Đối Tượng Mẫu (ManagementNodes) Chuẩn Khóa NodeCode
 -- Nút 1: Tòa nhà 01 - Cầu Giấy
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, AddressOrLocation) VALUES
-(NULL, 1, 'HN-CG01', N'Tòa nhà Hoa Mai (Cầu Giấy)', 0, N'Số 18 Dịch Vọng Hậu, Cầu Giấy, Hà Nội');
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'HN-CG01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, AddressOrLocation) 
+    VALUES (NULL, 1, 'HN-CG01', N'Tòa Nhà 01 - Cầu Giấy (Nhà Hoa Mai)', 0, N'Số 18 Ngõ 19 Dịch Vọng Hậu, Cầu Giấy, Hà Nội');
 
-DECLARE @Building1Id BIGINT = SCOPE_IDENTITY();
+DECLARE @Building1Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'HN-CG01');
+DECLARE @ManagerUserId BIGINT = (SELECT TOP 1 UserId FROM dbo.Users WHERE CitizenId = '001090004444');
 
 -- Phân quyền cho Quản lý Lê Văn Hoàng phụ trách Tòa nhà 1
-INSERT INTO dbo.ManagerBuildingAssignments (ManagerUserId, BuildingNodeId, IsPrimaryManager) 
-VALUES (4, @Building1Id, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagerBuildingAssignments WHERE BuildingNodeId = @Building1Id)
+    INSERT INTO dbo.ManagerBuildingAssignments (ManagerUserId, BuildingNodeId, IsPrimaryManager) 
+    VALUES (@ManagerUserId, @Building1Id, 1);
 
--- Con của Nhà 1: Khu tiện ích dùng chung
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName) VALUES
-(@Building1Id, 4, 'CG01-FAC', N'Khu vực Tiện ích dùng chung Tầng 1');
+-- Tiện ích chung Tầng 1 (Tòa 01)
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'TI-CG01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, AddressOrLocation) 
+    VALUES (@Building1Id, 2, 'TI-CG01', N'Khu Tiện Ích Dùng Chung (Sảnh & Để Xe Tầng 1)', N'Tầng 1 sảnh');
 
-DECLARE @Facility1Id BIGINT = SCOPE_IDENTITY();
+DECLARE @Facility1Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'TI-CG01');
 
 -- Các thiết bị dùng chung thuộc Khu tiện ích 1:
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, SerialNumber, WarrantyExpiryDate, CurrentCondition) VALUES
-(@Facility1Id, 11, 'WASH-01', N'Máy giặt chung Electrolux 11kg #1', 15000, 'SN-ELX-9988', '2026-12-15', 3), -- Báo hỏng
-(@Facility1Id, 12, 'EV-01', N'Trạm sạc xe điện thông minh 3.5kW', 4000, 'SN-EV-3321', '2027-05-20', 2),   -- Khó dùng
-(@Facility1Id, 13, 'TEL-01', N'Điện thoại nội bộ / liên lạc sảnh', 1000, 'SN-TEL-1100', '2026-11-30', 3),   -- Báo hỏng
-(@Facility1Id, 10, 'GATE-01', N'Cổng từ vân tay an ninh ra vào', 0, 'SN-LOCK-TUYA', '2027-01-01', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'WASH-01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, SerialNumber, WarrantyExpiryDate, CurrentCondition) 
+    VALUES (@Facility1Id, 4, 'WASH-01', N'Máy Giặt Chung Electrolux 11kg Inverter (Sảnh T1)', 15000, 'ELX-2026-8889', '2027-12-31', 3);
 
--- Con của Nhà 1: Tầng 2
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName) VALUES
-(@Building1Id, 2, 'CG01-F2', N'Tầng 2 Tòa nhà Hoa Mai');
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'EV-01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, SerialNumber, WarrantyExpiryDate, CurrentCondition) 
+    VALUES (@Facility1Id, 5, 'EV-01', N'Trạm Sạc Xe Điện Thông Minh 3.5kW', 4000, 'EV-AUTO-4421', '2028-06-30', 2);
 
-DECLARE @Floor2Id BIGINT = SCOPE_IDENTITY();
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'TEL-01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, CurrentCondition) 
+    VALUES (@Facility1Id, 6, 'TEL-01', N'Điện Thoại Công Cộng / Liên Lạc Sảnh', 1000, 0);
 
--- Con của Tầng 2: Phòng 201
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, DepositAmount) VALUES
-(@Floor2Id, 3, 'P201', N'Phòng 201 (Studio VIP)', 4500000, 4500000);
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'GATE-01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, HardwareMacOrTopic, CurrentCondition) 
+    VALUES (@Facility1Id, 8, 'GATE-01', N'Cổng An Ninh Tự Động Rơ-le WiFi & Vân Tay', 'relay/gate/cg01/open', 0);
 
-DECLARE @Room201Id BIGINT = SCOPE_IDENTITY();
+-- Tầng 2 (Tòa 01)
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'F2-CG01')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName) 
+    VALUES (@Building1Id, 2, 'F2-CG01', N'Tầng 2 (Khu Căn Hộ Studio)');
+
+DECLARE @Floor2Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'F2-CG01');
+
+-- Phòng 201
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'P201-CG')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, DepositAmount) 
+    VALUES (@Floor2Id, 3, 'P201-CG', N'Phòng 201 (VIP Studio Có Ban Công)', 4500000, 4500000);
+
+DECLARE @Room201Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'P201-CG');
 
 -- Thiết bị riêng trong Phòng 201:
-INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, SerialNumber, WarrantyExpiryDate, CurrentCondition) VALUES
-(@Room201Id, 5, 'EM-201', N'Công tơ điện tử WiFi P.201', 3800, 'EM-WIFI-201', '2028-01-01', 0),
-(@Room201Id, 6, 'WM-201', N'Đồng hồ nước lạnh P.201', 30000, 'WM-201', '2028-01-01', 0),
-(@Room201Id, 7, 'AC-201', N'Điều hòa Daikin Inverter 9000BTU', 0, 'DK-9000-201', '2027-08-10', 0),
-(@Room201Id, 8, 'FR-201', N'Tủ lạnh mini Funiki 90L', 0, 'FN-90-201', '2025-01-01', 1), -- Báo bẩn / đọng tuyết
-(@Room201Id, 9, 'WH-201', N'Bình nước nóng Ariston 20L', 0, 'AR-20-201', '2027-04-15', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'MTR-E201')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice) 
+    VALUES (@Room201Id, 9, 'MTR-E201', N'Công Tơ Điện WiFi P.201', 3800);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'MTR-W201')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice) 
+    VALUES (@Room201Id, 10, 'MTR-W201', N'Đồng Hồ Đo Nước Lạnh P.201', 30000);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'AC-201')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, MonthlyRentalPrice, SerialNumber, WarrantyExpiryDate) 
+    VALUES (@Room201Id, 11, 'AC-201', N'Điều Hòa Daikin 12000BTU Inverter', 0, 120000, 'DK-2025-9912', '2027-05-15');
+
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'FRG-201')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, MonthlyRentalPrice, SerialNumber, WarrantyExpiryDate, CurrentCondition) 
+    VALUES (@Room201Id, 12, 'FRG-201', N'Tủ Lạnh Mini Funiki 90L', 0, 100000, 'FNK-90L-3341', '2026-11-20', 1);
+
+IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'WHT-201')
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, MonthlyRentalPrice, SerialNumber, WarrantyExpiryDate) 
+    VALUES (@Room201Id, 13, 'WHT-201', N'Bình Nước Nóng Ariston 20L', 0, 0, 'ARS-20L-1102', '2028-09-01');
 GO
 
 -- 6.5 Chèn Hợp Đồng Thuê & Cư Dân Ở Cùng
-DECLARE @RoomNodeId BIGINT = (SELECT NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'P201');
-DECLARE @TenantId BIGINT = (SELECT UserId FROM dbo.Users WHERE CitizenId = '034098006666'); -- Nguyễn Văn An
-DECLARE @RoommateId BIGINT = (SELECT UserId FROM dbo.Users WHERE CitizenId = '034098008888'); -- Hoàng Quốc Bảo
+DECLARE @RoomNodeId BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'P201-CG');
+DECLARE @TenantId BIGINT = (SELECT TOP 1 UserId FROM dbo.Users WHERE CitizenId = '034098006666'); -- Nguyễn Văn An
+DECLARE @RoommateId BIGINT = (SELECT TOP 1 UserId FROM dbo.Users WHERE CitizenId = '034098008888'); -- Hoàng Quốc Bảo
 
-INSERT INTO dbo.RentalContracts (ContractCode, RoomNodeId, PrimaryTenantId, ContractStartDate, ContractEndDate, ActualCheckInDate, AgreedMonthlyPrice, DepositPaid, ContractStatus)
-VALUES ('HD-2026-P201', @RoomNodeId, @TenantId, '2026-09-01', '2027-02-28', '2026-08-28', 4500000, 4500000, 1);
+IF @RoomNodeId IS NOT NULL AND @TenantId IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM dbo.RentalContracts WHERE ContractCode = 'HD-2026-P201')
+    BEGIN
+        INSERT INTO dbo.RentalContracts (ContractCode, RoomNodeId, PrimaryTenantId, ContractStartDate, ContractEndDate, ActualCheckInDate, AgreedMonthlyPrice, DepositPaid, ContractStatus)
+        VALUES ('HD-2026-P201', @RoomNodeId, @TenantId, '2026-09-01', '2027-02-28', '2026-08-28', 4500000, 4500000, 1);
+    END
 
-DECLARE @ContractId BIGINT = SCOPE_IDENTITY();
+    DECLARE @ContractId BIGINT = (SELECT TOP 1 ContractId FROM dbo.RentalContracts WHERE ContractCode = 'HD-2026-P201');
 
--- Người ở cùng phòng 201 với An:
-INSERT INTO dbo.RoomOccupants (ContractId, UserId, Relationship, JoinDate, HasGateAccess) VALUES
-(@ContractId, @RoommateId, N'Bạn cùng phòng', '2026-08-28', 1);
+    IF @RoommateId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.RoomOccupants WHERE ContractId = @ContractId AND UserId = @RoommateId)
+    BEGIN
+        INSERT INTO dbo.RoomOccupants (ContractId, UserId, Relationship, JoinDate, HasGateAccess) 
+        VALUES (@ContractId, @RoommateId, N'Bạn cùng phòng', '2026-08-28', 1);
+    END
+END
 GO
 
 -- 6.6 Chèn Báo Cáo Sự Cố Thiết Bị (DeviceHealthFeedbacks)

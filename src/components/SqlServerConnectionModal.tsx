@@ -24,6 +24,7 @@ interface SqlServerConnectionModalProps {
   onPullData?: () => Promise<any>;
   onPushData?: () => Promise<any>;
   onInitSchema?: () => Promise<any>;
+  onDeduplicate?: () => Promise<any>;
 }
 
 export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> = ({
@@ -34,7 +35,8 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
   onTestConnection,
   onPullData,
   onPushData,
-  onInitSchema
+  onInitSchema,
+  onDeduplicate
 }) => {
   const [serverHost, setServerHost] = useState('localhost');
   const [serverPort, setServerPort] = useState('1433');
@@ -44,7 +46,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
   const [encrypt, setEncrypt] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [syncLoading, setSyncLoading] = useState<'pull' | 'push' | 'init' | null>(null);
+  const [syncLoading, setSyncLoading] = useState<'pull' | 'push' | 'init' | 'dedup' | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
 
@@ -57,15 +59,23 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
     setSyncMessage(null);
 
     try {
+      // Đăng nhập kết nối và tự động cập nhật CSDL luôn theo yêu cầu
       const res = await onTestConnection({
         server: serverHost,
         port: serverPort,
         database: databaseName,
         user: userName,
         password,
-        encrypt
+        encrypt,
+        autoSync: true
       });
       setTestResult(res);
+      if (res && res.connected) {
+        setSyncMessage({
+          type: 'success',
+          text: res.syncResult?.message || 'Đăng nhập thành công và đã cập nhật toàn bộ dữ liệu vào CSDL!'
+        });
+      }
     } catch (err: any) {
       setTestResult({
         success: false,
@@ -77,7 +87,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
     }
   };
 
-  const handleAction = async (action: 'pull' | 'push' | 'init') => {
+  const handleAction = async (action: 'pull' | 'push' | 'init' | 'dedup') => {
     setSyncLoading(action);
     setSyncMessage(null);
     try {
@@ -88,6 +98,8 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
         res = await onPushData();
       } else if (action === 'init' && onInitSchema) {
         res = await onInitSchema();
+      } else if (action === 'dedup' && onDeduplicate) {
+        res = await onDeduplicate();
       }
       if (res && res.success) {
         setSyncMessage({ type: 'success', text: res.message || 'Thao tác thành công!' });
@@ -225,15 +237,15 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold flex items-center gap-2 shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-bold flex items-center gap-2 shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              <span>{loading ? 'Đang kiểm tra kết nối...' : 'Kiểm Tra Kết Nối (Test)'}</span>
+              <span>{loading ? 'Đang đăng nhập & cập nhật CSDL...' : '⚡ Đăng Nhập & Cập Nhật CSDL Ngay'}</span>
             </button>
           </div>
         </form>
 
-        {/* Kết quả kiểm tra kết nối */}
+        {/* Kết quả kiểm tra kết nối & tự động cập nhật CSDL */}
         {testResult && (
           <div className={`p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
             testResult.connected 
@@ -244,7 +256,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
               {testResult.connected ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  <span>KẾT NỐI MS SQL SERVER THÀNH CÔNG!</span>
+                  <span>ĐÃ ĐĂNG NHẬP VÀ CẬP NHẬT CSDL THÀNH CÔNG!</span>
                 </>
               ) : (
                 <>
@@ -255,6 +267,32 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
             </div>
 
             <p>{testResult.message}</p>
+
+            {testResult.connected && testResult.syncResult?.counts && (
+              <div className="pt-2 border-t border-emerald-800/60 space-y-2">
+                <div className="text-[11px] font-semibold text-emerald-300">
+                  Số lượng bản ghi đã chuẩn hóa và cập nhật vào MS SQL Server (Đã loại bỏ trùng lặp):
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-emerald-700/40">
+                    <div className="text-emerald-400 font-bold text-sm">{testResult.syncResult.counts.users}</div>
+                    <div className="text-[10px] text-slate-300">Tài khoản</div>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-emerald-700/40">
+                    <div className="text-emerald-400 font-bold text-sm">{testResult.syncResult.counts.nodes}</div>
+                    <div className="text-[10px] text-slate-300">Cây thực thể</div>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-emerald-700/40">
+                    <div className="text-emerald-400 font-bold text-sm">{testResult.syncResult.counts.contracts}</div>
+                    <div className="text-[10px] text-slate-300">Hợp đồng</div>
+                  </div>
+                  <div className="bg-slate-900/80 p-2 rounded-xl border border-emerald-700/40">
+                    <div className="text-emerald-400 font-bold text-sm">{testResult.syncResult.counts.invoices}</div>
+                    <div className="text-[10px] text-slate-300">Hóa đơn</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {testResult.connected && testResult.serverInfo && (
               <div className="pt-2 border-t border-emerald-800/60 space-y-1.5 text-[11px] text-slate-300 font-mono">
@@ -290,7 +328,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-cyan-400" />
                 <h4 className="font-bold text-white text-xs">
-                  Trung Tâm Đồng Bộ Dữ Liệu 2 Chiều (SQL Server &harr; Web App)
+                  Trung Tâm Đồng Bộ Dữ Liệu 2 Chiều & Khử Trùng Lặp CSDL
                 </h4>
               </div>
               <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-mono">
@@ -299,7 +337,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              Dữ liệu trên giao diện web đang được lưu tạm thời trên trình duyệt. Để nạp dữ liệu từ các bảng SQL Server vào màn hình hoặc sao lưu dữ liệu hiện tại lên database, hãy chọn thao tác bên dưới:
+              Dữ liệu được cập nhật tự động ngay khi đăng nhập. Bạn cũng có thể thực hiện thủ công các thao tác bên dưới để đồng bộ dữ liệu hoặc dọn dẹp các bản ghi trùng lặp:
             </p>
 
             {/* Thông báo kết quả đồng bộ */}
@@ -314,8 +352,24 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-              {/* Nút 1: Kéo dữ liệu về */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
+              {/* Nút 1: Đẩy dữ liệu lên & khử trùng */}
+              <button
+                type="button"
+                disabled={syncLoading !== null}
+                onClick={() => handleAction('push')}
+                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 text-left transition-all disabled:opacity-50 group"
+              >
+                <div className="flex items-center gap-2 font-bold text-blue-400 text-xs mb-1">
+                  {syncLoading === 'push' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>📤</span>}
+                  <span>Cập Nhật Lên SQL</span>
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight">
+                  Lưu các phòng trọ, tài khoản và cây phân cấp vào CSDL (tự động khử trùng lặp).
+                </div>
+              </button>
+
+              {/* Nút 2: Kéo dữ liệu về */}
               <button
                 type="button"
                 disabled={syncLoading !== null}
@@ -331,23 +385,23 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
                 </div>
               </button>
 
-              {/* Nút 2: Đẩy dữ liệu lên */}
+              {/* Nút 3: Khử trùng lặp CSDL */}
               <button
                 type="button"
                 disabled={syncLoading !== null}
-                onClick={() => handleAction('push')}
-                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 text-left transition-all disabled:opacity-50 group"
+                onClick={() => handleAction('dedup')}
+                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-600/40 hover:border-emerald-500 text-left transition-all disabled:opacity-50 group"
               >
-                <div className="flex items-center gap-2 font-bold text-blue-400 text-xs mb-1">
-                  {syncLoading === 'push' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>📤</span>}
-                  <span>Đẩy Dữ Liệu Lên SQL</span>
+                <div className="flex items-center gap-2 font-bold text-emerald-400 text-xs mb-1">
+                  {syncLoading === 'dedup' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                  <span>Khử Trùng Lặp CSDL</span>
                 </div>
                 <div className="text-[10px] text-slate-400 leading-tight">
-                  Lưu các phòng trọ, tài khoản và cây phân cấp trên Web vào CSDL SQL Server.
+                  Quét và dọn sạch các bản ghi bị trùng mã NodeCode, CCCD hoặc SĐT trong CSDL.
                 </div>
               </button>
 
-              {/* Nút 3: Khởi tạo schema & seed data */}
+              {/* Nút 4: Khởi tạo schema & seed data */}
               <button
                 type="button"
                 disabled={syncLoading !== null}
@@ -359,7 +413,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
                   <span>Khởi Tạo CSDL Mẫu</span>
                 </div>
                 <div className="text-[10px] text-slate-400 leading-tight">
-                  Tự động chạy script <code>init_rental_tree_schema.sql</code> để tạo đầy đủ bảng & dữ liệu mẫu.
+                  Chạy script tạo bảng và nạp dữ liệu mẫu chuẩn hóa không trùng lặp.
                 </div>
               </button>
             </div>
