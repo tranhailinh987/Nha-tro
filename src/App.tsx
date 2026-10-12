@@ -1449,6 +1449,62 @@ export default function App() {
     }
   };
 
+  // 14.1 Nạp dữ liệu từ SQL Server về Web (Pull Data)
+  const handlePullDataFromSql = async () => {
+    try {
+      const res = await fetch('/api/sql/pull-all-data');
+      const data = await res.json();
+      if (data.success && data.hasData && data.data) {
+        if (data.data.users && data.data.users.length > 0) {
+          setAllUsers(data.data.users);
+          localStorage.setItem('rental_users', JSON.stringify(data.data.users));
+        }
+        if (data.data.nodes && data.data.nodes.length > 0) {
+          setNodes(data.data.nodes);
+          localStorage.setItem('rental_tree_nodes_v3', JSON.stringify(data.data.nodes));
+        }
+        if (data.data.contracts && data.data.contracts.length > 0) {
+          setContracts(data.data.contracts);
+          localStorage.setItem('rental_contracts', JSON.stringify(data.data.contracts));
+        }
+      }
+      return data;
+    } catch (err: any) {
+      return { success: false, message: 'Lỗi khi gọi API kéo dữ liệu: ' + err.message };
+    }
+  };
+
+  // 14.2 Đẩy toàn bộ dữ liệu Web hiện tại lên SQL Server (Push Data)
+  const handlePushDataToSql = async () => {
+    try {
+      const res = await fetch('/api/sql/push-all-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          users: allUsers,
+          nodes: nodes
+        })
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, message: 'Lỗi khi đẩy dữ liệu: ' + err.message };
+    }
+  };
+
+  // 14.3 Khởi tạo schema & seed data trực tiếp lên SQL Server
+  const handleInitSqlSchema = async () => {
+    try {
+      const res = await fetch('/api/sql/init-schema', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        await handlePullDataFromSql();
+      }
+      return data;
+    } catch (err: any) {
+      return { success: false, message: 'Lỗi khởi tạo schema: ' + err.message };
+    }
+  };
+
   // 15. Khách gửi yêu cầu Giữ phòng / Đặt trước
   const handleRequestReservation = (roomNodeId: number, expectedCheckIn: string) => {
     if (!currentUser) return;
@@ -1938,6 +1994,9 @@ export default function App() {
         isSqlConnected={isSqlConnected}
         serverInfo={sqlServerInfo}
         onTestConnection={handleTestSqlConnection}
+        onPullData={handlePullDataFromSql}
+        onPushData={handlePushDataToSql}
+        onInitSchema={handleInitSqlSchema}
       />
     </div>
   );

@@ -1,6 +1,8 @@
 {
-  "name": "Trợ Thủ Lập Trình Web Tiếng Việt",
-  "description": "Ứng dụng và không gian phát triển web hỗ trợ hoàn toàn bằng tiếng Việt.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "NhaTro Hub - Quản Lý & Tìm Kiếm Nhà Trọ Thông Minh",
+  "description": "Nền tảng tìm kiếm phòng trọ, căn hộ mini và quản lý dãy trọ thông minh với tính toán hóa đơn điện nước tự động, quản lý hợp đồng, khách thuê và báo cáo doanh thu.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

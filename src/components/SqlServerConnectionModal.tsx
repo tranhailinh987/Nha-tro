@@ -21,6 +21,9 @@ interface SqlServerConnectionModalProps {
   isSqlConnected: boolean;
   serverInfo: any;
   onTestConnection: (config: any) => Promise<any>;
+  onPullData?: () => Promise<any>;
+  onPushData?: () => Promise<any>;
+  onInitSchema?: () => Promise<any>;
 }
 
 export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> = ({
@@ -28,7 +31,10 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
   onClose,
   isSqlConnected,
   serverInfo,
-  onTestConnection
+  onTestConnection,
+  onPullData,
+  onPushData,
+  onInitSchema
 }) => {
   const [serverHost, setServerHost] = useState('localhost');
   const [serverPort, setServerPort] = useState('1433');
@@ -38,6 +44,8 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
   const [encrypt, setEncrypt] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState<'pull' | 'push' | 'init' | null>(null);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
 
   if (!isOpen) return null;
@@ -46,6 +54,7 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
     e.preventDefault();
     setLoading(true);
     setTestResult(null);
+    setSyncMessage(null);
 
     try {
       const res = await onTestConnection({
@@ -65,6 +74,30 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAction = async (action: 'pull' | 'push' | 'init') => {
+    setSyncLoading(action);
+    setSyncMessage(null);
+    try {
+      let res: any;
+      if (action === 'pull' && onPullData) {
+        res = await onPullData();
+      } else if (action === 'push' && onPushData) {
+        res = await onPushData();
+      } else if (action === 'init' && onInitSchema) {
+        res = await onInitSchema();
+      }
+      if (res && res.success) {
+        setSyncMessage({ type: 'success', text: res.message || 'Thao tác thành công!' });
+      } else {
+        setSyncMessage({ type: 'error', text: res?.message || 'Thao tác thất bại.' });
+      }
+    } catch (err: any) {
+      setSyncMessage({ type: 'error', text: err?.message || 'Lỗi xử lý đồng bộ dữ liệu.' });
+    } finally {
+      setSyncLoading(null);
     }
   };
 
@@ -247,6 +280,89 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Khối Thao Tác Đồng Bộ Dữ Liệu Thực Tế Khi Đã Kết Nối */}
+        {(isSqlConnected || testResult?.connected) && (
+          <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-cyan-400" />
+                <h4 className="font-bold text-white text-xs">
+                  Trung Tâm Đồng Bộ Dữ Liệu 2 Chiều (SQL Server &harr; Web App)
+                </h4>
+              </div>
+              <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-mono">
+                TCP 1433 Sẵn Sàng
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Dữ liệu trên giao diện web đang được lưu tạm thời trên trình duyệt. Để nạp dữ liệu từ các bảng SQL Server vào màn hình hoặc sao lưu dữ liệu hiện tại lên database, hãy chọn thao tác bên dưới:
+            </p>
+
+            {/* Thông báo kết quả đồng bộ */}
+            {syncMessage && (
+              <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                syncMessage.type === 'success' 
+                  ? 'bg-emerald-950/80 border border-emerald-500 text-emerald-200' 
+                  : 'bg-rose-950/80 border border-rose-500 text-rose-200'
+              }`}>
+                {syncMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
+                <span>{syncMessage.text}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              {/* Nút 1: Kéo dữ liệu về */}
+              <button
+                type="button"
+                disabled={syncLoading !== null}
+                onClick={() => handleAction('pull')}
+                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500 text-left transition-all disabled:opacity-50 group"
+              >
+                <div className="flex items-center gap-2 font-bold text-cyan-400 text-xs mb-1">
+                  {syncLoading === 'pull' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>📥</span>}
+                  <span>Tải Dữ Liệu Về Web</span>
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight">
+                  Đọc toàn bộ phòng, tòa nhà, hợp đồng từ bảng SQL Server nạp vào giao diện.
+                </div>
+              </button>
+
+              {/* Nút 2: Đẩy dữ liệu lên */}
+              <button
+                type="button"
+                disabled={syncLoading !== null}
+                onClick={() => handleAction('push')}
+                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 text-left transition-all disabled:opacity-50 group"
+              >
+                <div className="flex items-center gap-2 font-bold text-blue-400 text-xs mb-1">
+                  {syncLoading === 'push' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>📤</span>}
+                  <span>Đẩy Dữ Liệu Lên SQL</span>
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight">
+                  Lưu các phòng trọ, tài khoản và cây phân cấp trên Web vào CSDL SQL Server.
+                </div>
+              </button>
+
+              {/* Nút 3: Khởi tạo schema & seed data */}
+              <button
+                type="button"
+                disabled={syncLoading !== null}
+                onClick={() => handleAction('init')}
+                className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-600/40 hover:border-amber-500 text-left transition-all disabled:opacity-50 group"
+              >
+                <div className="flex items-center gap-2 font-bold text-amber-400 text-xs mb-1">
+                  {syncLoading === 'init' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  <span>Khởi Tạo CSDL Mẫu</span>
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight">
+                  Tự động chạy script <code>init_rental_tree_schema.sql</code> để tạo đầy đủ bảng & dữ liệu mẫu.
+                </div>
+              </button>
+            </div>
           </div>
         )}
 

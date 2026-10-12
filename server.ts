@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import sql from 'mssql';
 
@@ -262,6 +263,248 @@ app.post('/api/sql/sync-building', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi lưu tòa nhà vào SQL Server: ' + error.message
+    });
+  }
+});
+
+// 5. API: Khởi tạo bảng & nạp cấu trúc từ init_rental_tree_schema.sql
+app.post('/api/sql/init-schema', async (_req, res) => {
+  if (!sqlPool || !sqlPool.connected) {
+    return res.status(400).json({ success: false, message: 'Chưa kết nối tới MS SQL Server. Vui lòng kết nối trước.' });
+  }
+
+  try {
+    const schemaPath = path.resolve(__dirname, 'sql', 'init_rental_tree_schema.sql');
+    if (!fs.existsSync(schemaPath)) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy file sql/init_rental_tree_schema.sql' });
+    }
+
+    let fileContent = fs.readFileSync(schemaPath, 'utf8');
+    // Bỏ dòng USE master và USE RentalPropertyManagementDB
+    fileContent = fileContent.replace(/^\s*USE\s+[^\r\n;]+;?/gim, '');
+
+    // Cắt từng khối theo GO
+    const batches = fileContent
+      .split(/^\s*GO\s*$/gim)
+      .map((b) => b.trim())
+      .filter((b) => b.length > 0);
+
+    for (const batch of batches) {
+      if (batch) {
+        try {
+          await sqlPool.request().query(batch);
+        } catch (bErr: any) {
+          console.warn('[init-schema warning]:', bErr?.message);
+        }
+      }
+    }
+
+    const chk = await sqlPool.request().query('SELECT COUNT(*) AS TableCount FROM sys.tables');
+    const tableCount = chk.recordset[0]?.TableCount || 0;
+
+    return res.json({
+      success: true,
+      message: `Khởi tạo CSDL thành công! Đã tạo và cấu hình ${tableCount} bảng trên SQL Server.`,
+      tableCount
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi thực thi khởi tạo CSDL: ' + error.message
+    });
+  }
+});
+
+// 6. API: Kéo toàn bộ dữ liệu từ SQL Server về Web (Pull Data)
+app.get('/api/sql/pull-all-data', async (_req, res) => {
+  if (!sqlPool || !sqlPool.connected) {
+    return res.status(400).json({ success: false, message: 'Chưa kết nối tới MS SQL Server.' });
+  }
+
+  try {
+    const chk = await sqlPool.request().query(`
+      SELECT 
+        (SELECT COUNT(*) FROM sys.tables WHERE name = 'Users') AS HasUsers,
+        (SELECT COUNT(*) FROM sys.tables WHERE name = 'ManagementNodes') AS HasNodes,
+        (SELECT COUNT(*) FROM sys.tables WHERE name = 'RentalContracts') AS HasContracts
+    `);
+
+    const hasUsers = (chk.recordset[0]?.HasUsers || 0) > 0;
+    const hasNodes = (chk.recordset[0]?.HasNodes || 0) > 0;
+    const hasContracts = (chk.recordset[0]?.HasContracts || 0) > 0;
+
+    if (!hasUsers || !hasNodes) {
+      return res.json({
+        success: true,
+        hasData: false,
+        message: 'Các bảng dữ liệu (Users, ManagementNodes) chưa được tạo trong CSDL. Vui lòng bấm nút Khởi Tạo Bảng & Dữ Liệu Mẫu.'
+      });
+    }
+
+    // 1. Users
+    const usersResult = await sqlPool.request().query(`
+      SELECT UserId, RoleId, FullName, CitizenId, CitizenIdFrontImg, CitizenIdBackImg, PhoneNumber, Address, AvatarUrl, IsActive, CreatedAt
+      FROM dbo.Users
+    `);
+    const users = usersResult.recordset.map((u: any) => ({
+      userId: Number(u.UserId),
+      roleId: Number(u.RoleId),
+      fullName: u.FullName,
+      citizenId: u.CitizenId,
+      citizenIdFrontImg: u.CitizenIdFrontImg,
+      citizenIdBackImg: u.CitizenIdBackImg,
+      phoneNumber: u.PhoneNumber,
+      address: u.Address || '',
+      avatarUrl: u.AvatarUrl,
+      isActive: Boolean(u.IsActive),
+      createdAt: u.CreatedAt ? new Date(u.CreatedAt).toISOString().split('T')[0] : '2026-08-01'
+    }));
+
+    // 2. Nodes
+    const nodesResult = await sqlPool.request().query(`
+      SELECT m.*, a.ManagerUserId
+      FROM dbo.ManagementNodes m
+      LEFT JOIN dbo.ManagerBuildingAssignments a ON m.NodeId = a.BuildingNodeId
+      ORDER BY m.NodeId ASC
+    `);
+    const nodes = nodesResult.recordset.map((n: any) => ({
+      nodeId: Number(n.NodeId),
+      parentNodeId: n.ParentNodeId ? Number(n.ParentNodeId) : null,
+      typeId: Number(n.TypeId),
+      nodeCode: n.NodeCode,
+      nodeName: n.NodeName,
+      unitPrice: n.UnitPrice !== null ? Number(n.UnitPrice) : 0,
+      depositAmount: n.DepositAmount !== null ? Number(n.DepositAmount) : 0,
+      addressOrLocation: n.AddressOrLocation || '',
+      hardwareMacOrTopic: n.HardwareMacOrTopic || '',
+      serialNumber: n.SerialNumber || '',
+      warrantyExpiryDate: n.WarrantyExpiryDate ? new Date(n.WarrantyExpiryDate).toISOString().split('T')[0] : undefined,
+      currentCondition: Number(n.CurrentCondition || 0),
+      isActive: Boolean(n.IsActive),
+      createdAt: n.CreatedAt ? new Date(n.CreatedAt).toISOString().split('T')[0] : '2026-08-01',
+      managerUserId: n.ManagerUserId ? Number(n.ManagerUserId) : undefined,
+      electricRate: n.ElectricityRate !== null ? Number(n.ElectricityRate) : 3800,
+      waterRate: n.WaterRate !== null ? Number(n.WaterRate) : 30000,
+      isShared: !n.ParentNodeId || n.TypeId === 1 || n.TypeId === 2 ? false : (n.TypeId >= 4 && !n.ParentNodeId ? true : false)
+    }));
+
+    // 3. Contracts
+    let contracts: any[] = [];
+    if (hasContracts) {
+      const contractsResult = await sqlPool.request().query(`
+        SELECT c.*, u.FullName AS TenantName, r.NodeName AS RoomName, b.NodeName AS BuildingName, b.NodeId AS BuildingNodeId
+        FROM dbo.RentalContracts c
+        LEFT JOIN dbo.Users u ON c.PrimaryTenantId = u.UserId
+        LEFT JOIN dbo.ManagementNodes r ON c.RoomNodeId = r.NodeId
+        LEFT JOIN dbo.ManagementNodes b ON r.ParentNodeId = b.NodeId OR r.ParentNodeId IN (SELECT NodeId FROM dbo.ManagementNodes WHERE ParentNodeId = b.NodeId)
+      `);
+      contracts = contractsResult.recordset.map((c: any) => ({
+        contractId: Number(c.ContractId),
+        roomNodeId: Number(c.RoomNodeId),
+        roomName: c.RoomName || `Phòng ${c.RoomNodeId}`,
+        buildingName: c.BuildingName || 'Tòa Nhà',
+        buildingNodeId: c.BuildingNodeId ? Number(c.BuildingNodeId) : 1,
+        primaryTenantUserId: Number(c.PrimaryTenantId),
+        primaryTenantName: c.TenantName || 'Khách Thuê',
+        startDateContract: c.ContractStartDate ? new Date(c.ContractStartDate).toISOString().split('T')[0] : '2026-09-01',
+        endDateContract: c.ContractEndDate ? new Date(c.ContractEndDate).toISOString().split('T')[0] : '2027-02-28',
+        actualCheckInDate: c.ActualCheckInDate ? new Date(c.ActualCheckInDate).toISOString().split('T')[0] : '2026-08-28',
+        actualCheckOutDate: c.ActualCheckOutDate ? new Date(c.ActualCheckOutDate).toISOString().split('T')[0] : null,
+        monthlyRent: Number(c.AgreedMonthlyPrice || 0),
+        depositAmount: Number(c.DepositPaid || 0),
+        occupantCount: 1,
+        status: c.ContractStatus === 1 ? 'ACTIVE' : c.ContractStatus === 2 ? 'CHECKED_OUT' : 'PENDING'
+      }));
+    }
+
+    return res.json({
+      success: true,
+      hasData: users.length > 0 || nodes.length > 0,
+      data: {
+        users,
+        nodes,
+        contracts
+      },
+      message: `Đã nạp ${nodes.length} đối tượng, ${users.length} tài khoản và ${contracts.length} hợp đồng từ SQL Server!`
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi đọc dữ liệu từ SQL Server: ' + error.message
+    });
+  }
+});
+
+// 7. API: Đẩy toàn bộ dữ liệu Web hiện tại lên SQL Server (Push Data)
+app.post('/api/sql/push-all-data', async (req, res) => {
+  if (!sqlPool || !sqlPool.connected) {
+    return res.status(400).json({ success: false, message: 'Chưa kết nối tới MS SQL Server.' });
+  }
+
+  const { users, nodes } = req.body;
+  try {
+    // 1. Users
+    if (Array.isArray(users)) {
+      for (const u of users) {
+        const reqUser = sqlPool.request();
+        reqUser.input('RoleId', sql.TinyInt, u.roleId || 3);
+        reqUser.input('FullName', sql.NVarChar(100), u.fullName);
+        reqUser.input('CitizenId', sql.VarChar(20), u.citizenId);
+        reqUser.input('PhoneNumber', sql.VarChar(15), u.phoneNumber);
+        reqUser.input('Address', sql.NVarChar(255), u.address || '');
+        reqUser.input('PasswordHash', sql.VarChar(255), 'plain_or_hash_123');
+
+        await reqUser.query(`
+          IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE CitizenId = @CitizenId)
+          BEGIN
+            INSERT INTO dbo.Users (RoleId, FullName, CitizenId, PhoneNumber, Address, PasswordHash, IsActive)
+            VALUES (@RoleId, @FullName, @CitizenId, @PhoneNumber, @Address, @PasswordHash, 1);
+          END
+          ELSE
+          BEGIN
+            UPDATE dbo.Users 
+            SET FullName = @FullName, PhoneNumber = @PhoneNumber, Address = @Address, RoleId = @RoleId
+            WHERE CitizenId = @CitizenId;
+          END
+        `);
+      }
+    }
+
+    // 2. Nodes
+    if (Array.isArray(nodes)) {
+      for (const n of nodes) {
+        const reqNode = sqlPool.request();
+        reqNode.input('NodeCode', sql.VarChar(50), n.nodeCode);
+        reqNode.input('NodeName', sql.NVarChar(150), n.nodeName);
+        reqNode.input('TypeId', sql.Int, n.typeId || 1);
+        reqNode.input('UnitPrice', sql.Decimal(12, 2), n.unitPrice || 0);
+        reqNode.input('DepositAmount', sql.Decimal(12, 2), n.depositAmount || 0);
+        reqNode.input('AddressOrLocation', sql.NVarChar(255), n.addressOrLocation || '');
+
+        await reqNode.query(`
+          IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = @NodeCode)
+          BEGIN
+            INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, DepositAmount, AddressOrLocation, CurrentCondition, IsActive)
+            VALUES (NULL, @TypeId, @NodeCode, @NodeName, @UnitPrice, @DepositAmount, @AddressOrLocation, 0, 1);
+          END
+          ELSE
+          BEGIN
+            UPDATE dbo.ManagementNodes
+            SET NodeName = @NodeName, UnitPrice = @UnitPrice, DepositAmount = @DepositAmount, AddressOrLocation = @AddressOrLocation
+            WHERE NodeCode = @NodeCode;
+          END
+        `);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Đã đồng bộ toàn bộ dữ liệu Web lên các bảng SQL Server thành công!'
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi đẩy dữ liệu lên SQL Server: ' + error.message
     });
   }
 });
