@@ -250,6 +250,45 @@ async function ensureSchemaAndTables(pool: sql.ConnectionPool) {
         ContractEndDate DATE NULL
       );
     END
+
+    -- AUTO MIGRATION: Đảm bảo bảng dbo.ManagementNodes có đầy đủ trường MonthlyRentalPrice và các chi phí khác
+    IF OBJECT_ID('dbo.ManagementNodes', 'U') IS NOT NULL
+    BEGIN
+      IF COL_LENGTH('dbo.ManagementNodes', 'MonthlyRentalPrice') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD MonthlyRentalPrice DECIMAL(12,2) DEFAULT(0);
+      IF COL_LENGTH('dbo.ManagementNodes', 'SanitationFee') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD SanitationFee DECIMAL(12,2) DEFAULT(30000);
+      IF COL_LENGTH('dbo.ManagementNodes', 'ResidenceFee') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD ResidenceFee DECIMAL(12,2) DEFAULT(100000);
+      IF COL_LENGTH('dbo.ManagementNodes', 'ElectricityRate') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD ElectricityRate DECIMAL(12,2) DEFAULT(3800);
+      IF COL_LENGTH('dbo.ManagementNodes', 'WaterRate') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD WaterRate DECIMAL(12,2) DEFAULT(30000);
+    END
+
+    -- AUTO MIGRATION: Đảm bảo bảng dbo.Users có đầy đủ các cột Address, ảnh CCCD
+    IF OBJECT_ID('dbo.Users', 'U') IS NOT NULL
+    BEGIN
+      IF COL_LENGTH('dbo.Users', 'Address') IS NULL
+        ALTER TABLE dbo.Users ADD Address NVARCHAR(255) NULL;
+      IF COL_LENGTH('dbo.Users', 'CitizenIdFrontImg') IS NULL
+        ALTER TABLE dbo.Users ADD CitizenIdFrontImg VARCHAR(MAX) NULL;
+      IF COL_LENGTH('dbo.Users', 'CitizenIdBackImg') IS NULL
+        ALTER TABLE dbo.Users ADD CitizenIdBackImg VARCHAR(MAX) NULL;
+      IF COL_LENGTH('dbo.Users', 'AvatarUrl') IS NULL
+        ALTER TABLE dbo.Users ADD AvatarUrl VARCHAR(MAX) NULL;
+    END
+
+    -- AUTO MIGRATION: Đảm bảo bảng dbo.RentalContracts có đầy đủ các cột
+    IF OBJECT_ID('dbo.RentalContracts', 'U') IS NOT NULL
+    BEGIN
+      IF COL_LENGTH('dbo.RentalContracts', 'AgreedMonthlyPrice') IS NULL
+        ALTER TABLE dbo.RentalContracts ADD AgreedMonthlyPrice DECIMAL(12,2) DEFAULT(0);
+      IF COL_LENGTH('dbo.RentalContracts', 'DepositPaid') IS NULL
+        ALTER TABLE dbo.RentalContracts ADD DepositPaid DECIMAL(12,2) DEFAULT(0);
+      IF COL_LENGTH('dbo.RentalContracts', 'DepositRefunded') IS NULL
+        ALTER TABLE dbo.RentalContracts ADD DepositRefunded DECIMAL(12,2) DEFAULT(0);
+    END
   `);
 }
 
@@ -513,12 +552,17 @@ async function syncAllDataToSqlServer(pool: sql.ConnectionPool, payload: any) {
       const parentNode = item.parentNodeId ? nodesMap.get(item.parentNodeId) : null;
       const parentCode = parentNode?.nodeCode || null;
 
+      // Với phòng (typeId === 3), unitPrice chính là giá thuê phòng hàng tháng (MonthlyRentalPrice)
+      const isRoom = item.typeId === 3;
+      const unitPriceVal = item.unitPrice ?? (isRoom ? item.monthlyRentalPrice : 0) ?? 0;
+      const monthlyRentalPriceVal = item.monthlyRentalPrice ?? (isRoom ? item.unitPrice : 0) ?? 0;
+
       const r = pool.request();
       r.input('NodeCode', sql.VarChar(50), String(item.nodeCode).trim());
       r.input('ParentNodeCode', sql.VarChar(50), parentCode ? String(parentCode).trim() : null);
       r.input('TypeId', sql.Int, item.typeId || 1);
       r.input('NodeName', sql.NVarChar(150), item.nodeName || 'Đối tượng');
-      r.input('UnitPrice', sql.Decimal(12, 2), item.unitPrice || 0);
+      r.input('UnitPrice', sql.Decimal(12, 2), unitPriceVal);
       r.input('DepositAmount', sql.Decimal(12, 2), item.depositAmount || 0);
       r.input('AddressOrLocation', sql.NVarChar(255), item.addressOrLocation || '');
       r.input('HardwareMacOrTopic', sql.VarChar(150), item.hardwareMacOrTopic || null);
@@ -528,7 +572,7 @@ async function syncAllDataToSqlServer(pool: sql.ConnectionPool, payload: any) {
       r.input('WaterRate', sql.Decimal(12, 2), item.waterRate || 30000);
       r.input('SanitationFee', sql.Decimal(12, 2), item.sanitationFeePerPerson || 30000);
       r.input('ResidenceFee', sql.Decimal(12, 2), item.residenceFeePerPerson || 100000);
-      r.input('MonthlyRentalPrice', sql.Decimal(12, 2), item.monthlyRentalPrice || 0);
+      r.input('MonthlyRentalPrice', sql.Decimal(12, 2), monthlyRentalPriceVal);
       r.input('CurrentCondition', sql.TinyInt, item.currentCondition || 0);
       r.input('IsActive', sql.Bit, item.isActive !== false ? 1 : 0);
 
@@ -1253,13 +1297,18 @@ app.get('/api/sql/pull-all-data', async (_req, res) => {
 
       const isSharedDevice = typeId >= 4 ? (roomId === null) : false;
 
+      const rawUnitPrice = n.UnitPrice !== null ? Number(n.UnitPrice) : 0;
+      const rawMonthlyRent = n.MonthlyRentalPrice !== null ? Number(n.MonthlyRentalPrice) : 0;
+      const effUnitPrice = rawUnitPrice > 0 ? rawUnitPrice : (typeId === 3 ? rawMonthlyRent : 0);
+      const effMonthlyRent = rawMonthlyRent > 0 ? rawMonthlyRent : (typeId === 3 ? rawUnitPrice : 0);
+
       return {
         nodeId: nId,
         parentNodeId: pId,
         typeId,
         nodeCode: n.NodeCode,
         nodeName: n.NodeName,
-        unitPrice: n.UnitPrice !== null ? Number(n.UnitPrice) : 0,
+        unitPrice: effUnitPrice,
         depositAmount: n.DepositAmount !== null ? Number(n.DepositAmount) : 0,
         addressOrLocation: n.AddressOrLocation || '',
         hardwareMacOrTopic: n.HardwareMacOrTopic || '',
@@ -1273,7 +1322,7 @@ app.get('/api/sql/pull-all-data', async (_req, res) => {
         waterRate: n.WaterRate !== null ? Number(n.WaterRate) : 30000,
         sanitationFeePerPerson: n.SanitationFee !== null ? Number(n.SanitationFee) : 30000,
         residenceFeePerPerson: n.ResidenceFee !== null ? Number(n.ResidenceFee) : 100000,
-        monthlyRentalPrice: n.MonthlyRentalPrice !== null ? Number(n.MonthlyRentalPrice) : 0,
+        monthlyRentalPrice: effMonthlyRent,
         isShared: isSharedDevice,
         buildingNodeId: buildingId,
         roomNodeId: roomId

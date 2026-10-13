@@ -78,6 +78,7 @@ CREATE TABLE dbo.ManagementNodes (
     NodeCode VARCHAR(50) NOT NULL,            -- Mã nhận diện: HN-CG01, P201, EV-01, TEL-01
     NodeName NVARCHAR(150) NOT NULL,          -- Tên cụ thể
     UnitPrice DECIMAL(12,2) DEFAULT(0),       -- Giá thuê phòng / Giá 1 số điện / 1 khối nước / 1 lần giặt
+    MonthlyRentalPrice DECIMAL(12,2) DEFAULT(0), -- Giá thuê hàng tháng (cho phòng trọ hoặc thiết bị thuê theo tháng)
     DepositAmount DECIMAL(12,2) DEFAULT(0),   -- Tiền cọc phòng
     AddressOrLocation NVARCHAR(255) NULL,     -- Địa chỉ tòa nhà hoặc vị trí phòng
     HardwareMacOrTopic VARCHAR(150) NULL,     -- Địa chỉ MAC khóa cổng, rơ-le IoT hoặc topic MQTT
@@ -85,10 +86,28 @@ CREATE TABLE dbo.ManagementNodes (
     WarrantyExpiryDate DATE NULL,             -- Hạn bảo hành thiết bị
     ElectricityRate DECIMAL(12,2) DEFAULT(3800), -- Đơn giá điện quy định của tòa nhà / phòng (đ/kWh)
     WaterRate DECIMAL(12,2) DEFAULT(30000),       -- Đơn giá nước quy định của tòa nhà / phòng (đ/m³)
+    SanitationFee DECIMAL(12,2) DEFAULT(30000),   -- Phí vệ sinh theo đầu người/tháng (đ/người/tháng)
+    ResidenceFee DECIMAL(12,2) DEFAULT(100000),   -- Phí tạm trú tạm vắng theo đầu người/năm (đ/người/năm)
     CurrentCondition TINYINT DEFAULT(0),      -- 0: Bình thường, 1: Báo bẩn, 2: Khó dùng, 3: Hư hỏng
     IsActive BIT DEFAULT(1),
     CreatedAt DATETIME2 DEFAULT SYSDATETIME()
 );
+GO
+
+-- Đảm bảo an toàn nếu bảng đã tồn tại sẵn trong CSDL từ trước (Safe Schema Migration):
+IF OBJECT_ID('dbo.ManagementNodes', 'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('dbo.ManagementNodes', 'MonthlyRentalPrice') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD MonthlyRentalPrice DECIMAL(12,2) DEFAULT(0);
+    IF COL_LENGTH('dbo.ManagementNodes', 'SanitationFee') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD SanitationFee DECIMAL(12,2) DEFAULT(30000);
+    IF COL_LENGTH('dbo.ManagementNodes', 'ResidenceFee') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD ResidenceFee DECIMAL(12,2) DEFAULT(100000);
+    IF COL_LENGTH('dbo.ManagementNodes', 'ElectricityRate') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD ElectricityRate DECIMAL(12,2) DEFAULT(3800);
+    IF COL_LENGTH('dbo.ManagementNodes', 'WaterRate') IS NULL
+        ALTER TABLE dbo.ManagementNodes ADD WaterRate DECIMAL(12,2) DEFAULT(30000);
+END
 GO
 
 -- 2.3 Bảng Phân Quyền Quản Lý Tòa Nhà (1 người quản lý 1 hoặc nhiều tòa nhà)
@@ -414,8 +433,8 @@ DECLARE @Floor2Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE N
 
 -- Phòng 201
 IF NOT EXISTS (SELECT 1 FROM dbo.ManagementNodes WHERE NodeCode = 'P201-CG')
-    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, DepositAmount) 
-    VALUES (@Floor2Id, 3, 'P201-CG', N'Phòng 201 (VIP Studio Có Ban Công)', 4500000, 4500000);
+    INSERT INTO dbo.ManagementNodes (ParentNodeId, TypeId, NodeCode, NodeName, UnitPrice, MonthlyRentalPrice, DepositAmount) 
+    VALUES (@Floor2Id, 3, 'P201-CG', N'Phòng 201 (VIP Studio Có Ban Công)', 4500000, 4500000, 4500000);
 
 DECLARE @Room201Id BIGINT = (SELECT TOP 1 NodeId FROM dbo.ManagementNodes WHERE NodeCode = 'P201-CG');
 
