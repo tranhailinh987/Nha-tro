@@ -1949,6 +1949,7 @@ export default function App() {
                 onAddChildNode={handleAddChildNode}
                 onUpdateCondition={handleUpdateCondition}
                 onOpenAddBuildingModal={() => setShowAddBuildingModal(true)}
+                onOpenAddRoomModal={handleOpenAddRoomModal}
                 onAddRoom={handleAddRoom}
                 onDeleteRoom={handleDeleteRoom}
                 onUpdateRoomPrice={handleUpdateRoomPrice}

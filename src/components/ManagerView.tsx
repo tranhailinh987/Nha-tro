@@ -73,7 +73,15 @@ interface ManagerViewProps {
   issues: DeviceIssueReport[];
   reviews: TwoWayReview[];
   objectTypes: ObjectType[];
-  onAddRoom: (buildingNodeId: number, roomName: string, rent: number, deposit: number, roomCode?: string, priceNote?: string) => void;
+  onAddRoom: (
+    buildingNodeId: number, 
+    roomName: string, 
+    rent: number, 
+    deposit: number, 
+    roomCode?: string, 
+    priceNote?: string,
+    imageUrl?: string
+  ) => void;
   onDeleteRoom?: (roomNodeId: number) => void;
   onUpdateRoomPrice?: (roomNodeId: number, newPrice: number, priceNote?: string) => void;
   onAddDeviceToRoom: (roomNodeId: number, typeId: number, deviceName: string, serial: string) => void;
@@ -222,6 +230,7 @@ export const ManagerView: React.FC<ManagerViewProps> = ({
   const [newRoomRent, setNewRoomRent] = useState(4500000);
   const [newRoomDeposit, setNewRoomDeposit] = useState(4500000);
   const [newRoomPriceNote, setNewRoomPriceNote] = useState('Giá tiêu chuẩn');
+  const [newRoomImageUrl, setNewRoomImageUrl] = useState<string>('');
 
   // Modal Ấn Định Mức Giá Theo Thời Điểm
   const [editingPriceRoom, setEditingPriceRoom] = useState<ManagementNode | null>(null);
@@ -437,11 +446,13 @@ export const ManagerView: React.FC<ManagerViewProps> = ({
       Number(newRoomRent),
       Number(newRoomDeposit),
       newRoomCode.trim() || undefined,
-      newRoomPriceNote.trim() || undefined
+      newRoomPriceNote.trim() || undefined,
+      newRoomImageUrl.trim() || undefined
     );
     setShowAddRoomModal(false);
     setNewRoomCode('');
     setNewRoomName('');
+    setNewRoomImageUrl('');
   };
 
   // Mở modal ấn định giá phòng
@@ -2489,14 +2500,19 @@ export const ManagerView: React.FC<ManagerViewProps> = ({
         </div>
       )}
 
-      {/* Modal Thêm Phòng Mới Vào Tòa Nhà */}
+      {/* Modal Thêm Phòng Mới Vào Tòa Nhà - Chuẩn Hóa Đồng Nhất Giao Diện & Tính Năng */}
       {showAddRoomModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <DoorClosed className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-white text-base">Thêm Phòng Thuê Mới</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <DoorClosed className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Thêm Phòng Mới Vào Tòa Nhà</h3>
+                  <p className="text-xs text-slate-400">Quy chuẩn đồng nhất: Tạo nhà xong mới tạo phòng • Ấn định giá theo thời điểm</p>
+                </div>
               </div>
               <button 
                 onClick={() => setShowAddRoomModal(false)}
@@ -2506,93 +2522,216 @@ export const ManagerView: React.FC<ManagerViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateRoom} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateRoom} className="space-y-4 text-xs">
+              {/* Chọn Tòa Nhà Thuộc Quyền Quản Lý */}
               <div>
-                <label className="block text-slate-300 mb-1 font-medium">Tòa Nhà Thuộc Quyền Quản Lý:</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Tòa Nhà Thuộc Quyền Quản Lý:</label>
                 <select
                   value={newRoomBuildingId}
                   onChange={(e) => setNewRoomBuildingId(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-blue-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-semibold outline-none focus:border-emerald-500"
                 >
                   {myBuildings.map((b) => (
-                    <option key={b.nodeId} value={b.nodeId}>{b.nodeName}</option>
+                    <option key={b.nodeId} value={b.nodeId}>{b.nodeName} ({b.nodeCode})</option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Tên Phòng & Mã Phòng */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 mb-1 font-medium">Mã Phòng:</label>
+                  <label className="block text-slate-300 mb-1 font-semibold">Mã Phòng:</label>
                   <input
                     type="text"
                     value={newRoomCode}
                     onChange={(e) => setNewRoomCode(e.target.value)}
-                    placeholder="VD: P204, P301"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none font-mono uppercase"
+                    placeholder="VD: P-101, P-202"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none font-mono uppercase focus:border-emerald-500"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 mb-1 font-medium">Tên Phòng:</label>
+                  <label className="block text-slate-300 mb-1 font-semibold">Tên Phòng Hiển Thị:</label>
                   <input
                     type="text"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="VD: Phòng 204 (Studio)"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none"
+                    placeholder="VD: Phòng 101 - Ban công thoáng"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500"
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 mb-1 font-medium">Giá Thuê (đ/tháng):</label>
-                  <input
-                    type="number"
-                    step="50000"
-                    value={newRoomRent}
-                    onChange={(e) => setNewRoomRent(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none font-mono font-bold text-emerald-400"
-                    required
-                  />
+              {/* Giá Thuê & Tiền Cọc */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-emerald-300 font-semibold mb-1">
+                      Giá Thuê Tháng (đ/tháng):
+                    </label>
+                    <input
+                      type="number"
+                      step="50000"
+                      min="0"
+                      value={newRoomRent}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setNewRoomRent(val);
+                        setNewRoomDeposit(val);
+                      }}
+                      className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-white font-mono font-bold outline-none focus:border-emerald-400"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      = {newRoomRent.toLocaleString('vi-VN')} đ/tháng
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-amber-300 font-semibold mb-1">
+                      Tiền Đặt Cọc (đ):
+                    </label>
+                    <input
+                      type="number"
+                      step="50000"
+                      min="0"
+                      value={newRoomDeposit}
+                      onChange={(e) => setNewRoomDeposit(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-white font-mono font-bold outline-none focus:border-amber-400"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      = {newRoomDeposit.toLocaleString('vi-VN')} đ cọc
+                    </span>
+                  </div>
                 </div>
+
+                {/* Chọn nhanh mức giá */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400">Chọn nhanh giá:</span>
+                  {[3500000, 4000000, 4500000, 5000000, 5500000, 6000000].map((quick) => (
+                    <button
+                      type="button"
+                      key={quick}
+                      onClick={() => {
+                        setNewRoomRent(quick);
+                        setNewRoomDeposit(quick);
+                      }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-all ${
+                        newRoomRent === quick
+                          ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {(quick / 1000000).toFixed(1)}Tr
+                    </button>
+                  ))}
+                </div>
+
+                {/* Thời điểm định giá */}
                 <div>
-                  <label className="block text-slate-300 mb-1 font-medium">Tiền Cọc (đ):</label>
+                  <label className="block text-slate-300 mb-1 font-semibold flex items-center justify-between">
+                    <span>Thời Điểm / Ghi Chú Mức Giá:</span>
+                    <span className="text-[10px] text-emerald-400 font-normal">Ấn định theo mùa</span>
+                  </label>
                   <input
-                    type="number"
-                    step="50000"
-                    value={newRoomDeposit}
-                    onChange={(e) => setNewRoomDeposit(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none font-mono"
-                    required
+                    type="text"
+                    value={newRoomPriceNote}
+                    onChange={(e) => setNewRoomPriceNote(e.target.value)}
+                    placeholder="Ví dụ: Giá mùa cao điểm tháng 9/2026, Giá ưu đãi..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500"
                   />
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                    <span className="text-slate-500">Mẫu gợi ý:</span>
+                    {['Giá tiêu chuẩn', 'Giá mùa cao điểm tháng 9/2026', 'Giá ưu đãi sinh viên (-5%)'].map((sug) => (
+                      <button
+                        type="button"
+                        key={sug}
+                        onClick={() => setNewRoomPriceNote(sug)}
+                        className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
+                      >
+                        {sug}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 mb-1 font-medium">Thời Điểm / Ghi Chú Giá:</label>
-                <input
-                  type="text"
-                  value={newRoomPriceNote}
-                  onChange={(e) => setNewRoomPriceNote(e.target.value)}
-                  placeholder="Ví dụ: Giá mùa cao điểm tháng 9/2026, Giá khuyến mãi..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none"
-                />
+              {/* Upload ảnh phòng trọ */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-slate-300 font-semibold flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                    Ảnh Chụp Thực Tế Của Phòng:
+                  </label>
+                  {newRoomImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setNewRoomImageUrl('')}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Xóa ảnh</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 flex-shrink-0">
+                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Chọn File Ảnh</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setNewRoomImageUrl(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  <input
+                    type="url"
+                    value={newRoomImageUrl}
+                    onChange={(e) => setNewRoomImageUrl(e.target.value)}
+                    placeholder="Hoặc dán link ảnh (https://...)"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500 text-xs"
+                  />
+                </div>
+
+                {newRoomImageUrl && (
+                  <div className="mt-2 relative rounded-xl overflow-hidden border border-slate-700/80 h-32 bg-slate-900 group">
+                    <img src={newRoomImageUrl} alt="Ảnh phòng" className="w-full h-full object-cover" />
+                    <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur text-emerald-400 text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Ảnh xem trước phòng</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddRoomModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95"
                 >
-                  Tạo Phòng
+                  <Plus className="w-4 h-4" />
+                  <span>Xác Nhận Thêm Phòng</span>
                 </button>
               </div>
             </form>
