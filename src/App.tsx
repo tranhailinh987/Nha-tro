@@ -187,14 +187,46 @@ export default function App() {
   const [isSqlConnected, setIsSqlConnected] = useState(false);
   const [sqlServerInfo, setSqlServerInfo] = useState<any>(null);
 
-  // Kiểm tra trạng thái SQL Server backend khi khởi chạy
+  // Kiểm tra trạng thái SQL Server backend khi khởi chạy & Tự động kết nối lại nếu có thông tin đã lưu
   useEffect(() => {
     fetch('/api/sql/status')
       .then((res) => res.json())
-      .then((data) => {
+      .then(async (data) => {
         if (data.connected) {
           setIsSqlConnected(true);
           setSqlServerInfo(data);
+        } else {
+          // Nếu backend chưa kết nối (do server vừa khởi động lại hoặc mới tải trang),
+          // kiểm tra xem trong localStorage người dùng có lưu thông tin kết nối không
+          try {
+            const savedCreds = localStorage.getItem('sql_server_connection_credentials');
+            if (savedCreds) {
+              const creds = JSON.parse(savedCreds);
+              if (creds && creds.server && creds.user) {
+                // Tự động kết nối lại ngầm
+                const res = await fetch('/api/sql/test-connection', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    server: creds.server,
+                    port: creds.port,
+                    database: creds.database,
+                    user: creds.user,
+                    password: creds.password,
+                    encrypt: creds.encrypt,
+                    autoSync: false // Chỉ kết nối lại phiên làm việc
+                  })
+                });
+                const connData = await res.json();
+                if (connData.connected) {
+                  setIsSqlConnected(true);
+                  setSqlServerInfo(connData.serverInfo);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Auto reconnect failed:', e);
+          }
         }
       })
       .catch(() => {});

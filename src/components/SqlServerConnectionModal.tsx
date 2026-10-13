@@ -38,12 +38,58 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
   onInitSchema,
   onDeduplicate
 }) => {
-  const [serverHost, setServerHost] = useState('localhost');
-  const [serverPort, setServerPort] = useState('1433');
-  const [databaseName, setDatabaseName] = useState('RentalPropertyManagementDB');
-  const [userName, setUserName] = useState('sa');
-  const [password, setPassword] = useState('');
-  const [encrypt, setEncrypt] = useState(false);
+  const STORAGE_KEY = 'sql_server_connection_credentials';
+
+  // Load saved connection info from localStorage or defaults
+  const [serverHost, setServerHost] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved).server || 'localhost';
+    } catch {}
+    return 'localhost';
+  });
+  const [serverPort, setServerPort] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved).port || '1433';
+    } catch {}
+    return '1433';
+  });
+  const [databaseName, setDatabaseName] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved).database || 'RentalPropertyManagementDB';
+    } catch {}
+    return 'RentalPropertyManagementDB';
+  });
+  const [userName, setUserName] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved).user || 'sa';
+    } catch {}
+    return 'sa';
+  });
+  const [password, setPassword] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved).password || '';
+    } catch {}
+    return '';
+  });
+  const [encrypt, setEncrypt] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return !!JSON.parse(saved).encrypt;
+    } catch {}
+    return false;
+  });
+  const [rememberInfo, setRememberInfo] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? true : true; // Mặc định bật ghi nhớ thông tin
+    } catch {}
+    return true;
+  });
 
   const [loading, setLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState<'pull' | 'push' | 'init' | 'dedup' | null>(null);
@@ -57,6 +103,24 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
     setLoading(true);
     setTestResult(null);
     setSyncMessage(null);
+
+    // Lưu lại thông tin đăng nhập vào localStorage nếu bật rememberInfo
+    try {
+      if (rememberInfo) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          server: serverHost,
+          port: serverPort,
+          database: databaseName,
+          user: userName,
+          password: password,
+          encrypt: encrypt
+        }));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (e) {
+      console.warn('Cannot save to localStorage:', e);
+    }
 
     try {
       // Đăng nhập kết nối và tự động cập nhật CSDL luôn theo yêu cầu
@@ -211,17 +275,48 @@ export const SqlServerConnectionModal: React.FC<SqlServerConnectionModalProps> =
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="encryptToggle"
-              checked={encrypt}
-              onChange={(e) => setEncrypt(e.target.checked)}
-              className="rounded bg-slate-950 border-slate-800"
-            />
-            <label htmlFor="encryptToggle" className="text-slate-300 text-xs">
-              Mã hóa kết nối (Encrypt = true - chỉ bật khi dùng Azure SQL hoặc có SSL certificate)
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rememberToggle"
+                checked={rememberInfo}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setRememberInfo(val);
+                  if (!val) {
+                    localStorage.removeItem(STORAGE_KEY);
+                  } else {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                      server: serverHost,
+                      port: serverPort,
+                      database: databaseName,
+                      user: userName,
+                      password: password,
+                      encrypt: encrypt
+                    }));
+                  }
+                }}
+                className="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-0 cursor-pointer"
+              />
+              <label htmlFor="rememberToggle" className="text-cyan-400 font-medium text-xs cursor-pointer flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Ghi nhớ thông tin kết nối (Tải lại trang không cần nhập lại)</span>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="encryptToggle"
+                checked={encrypt}
+                onChange={(e) => setEncrypt(e.target.checked)}
+                className="rounded bg-slate-950 border-slate-800"
+              />
+              <label htmlFor="encryptToggle" className="text-slate-300 text-xs">
+                Mã hóa kết nối (Encrypt = true - chỉ bật khi dùng Azure SQL hoặc có SSL certificate)
+              </label>
+            </div>
           </div>
 
           <div className="flex justify-between items-center pt-2">
